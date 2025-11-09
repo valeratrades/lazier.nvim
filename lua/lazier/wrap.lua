@@ -14,8 +14,12 @@ return function(opts)
     end
 
     local keymaps = { obj = vim.keymap, name = "set" };
+    local custom_keymaps = { obj = _G, name = "K" };
+    local user_commands = { obj = vim.api, name = "nvim_create_user_command" };
     local all_wrappers = {
         keymaps,
+        custom_keymaps,
+        user_commands,
         { obj = vim.api, name = "nvim_set_hl" },
         { obj = vim.api, name = "nvim_create_augroup" },
         { obj = vim.api, name = "nvim_create_autocmd" },
@@ -59,11 +63,13 @@ return function(opts)
     end
     local new_config = result
 
-    if #keymaps.calls > 0 then
+    local total_keymaps = #keymaps.calls + #custom_keymaps.calls
+    if total_keymaps > 0 then
         opts.keys = opts.keys or {}
         if type(opts.keys) ~= "table" then
             error("expected table for 'keys'")
         end
+        -- Handle vim.keymap.set calls
         for _, keymap in ipairs(keymaps.calls) do
             local desc = type(keymap[4]) == "table"
                 and keymap[4].desc
@@ -73,6 +79,29 @@ return function(opts)
                 mode = keymap[1],
                 desc = desc
             })
+        end
+        -- Handle K() calls (same signature: mode, lhs, rhs, opts)
+        for _, keymap in ipairs(custom_keymaps.calls) do
+            local desc = type(keymap[4]) == "table"
+                and keymap[4].desc
+                or nil
+            table.insert(opts.keys, {
+                keymap[2],
+                mode = keymap[1],
+                desc = desc
+            })
+        end
+    end
+
+    -- Extract user commands for lazy loading
+    if #user_commands.calls > 0 then
+        opts.cmd = opts.cmd or {}
+        if type(opts.cmd) ~= "table" then
+            error("expected table for 'cmd'")
+        end
+        for _, cmd in ipairs(user_commands.calls) do
+            -- cmd[1] is the command name
+            table.insert(opts.cmd, cmd[1])
         end
     end
 
